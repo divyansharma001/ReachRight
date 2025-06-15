@@ -1,5 +1,3 @@
-// Filename: server/server.js
-
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
@@ -19,7 +17,7 @@ if (!apiKey) {
 
 const genAI = new GoogleGenerativeAI(apiKey);
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
+  model: "gemini-1.5-flash", // Using 1.5 Flash for better instruction following and speed
   safetySettings: [
     { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
     { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -30,62 +28,69 @@ const model = genAI.getGenerativeModel({
 
 app.post('/api/generate-email', async (req, res) => {
   try {
-    const { senderProfile, recipientInfo, recipientContext } = req.body;
+    // --- UPDATED DESTRUCTURING ---
+    const { senderProfile, recipientName, emailGoal, recipientContext } = req.body;
 
-    if (!senderProfile || !recipientInfo) {
-      return res.status(400).json({ error: 'Missing sender profile or recipient info.' });
+    if (!senderProfile || !emailGoal) {
+      return res.status(400).json({ error: 'Missing sender profile or email goal.' });
     }
 
+    // --- REFINED & MORE DETAILED PROMPT ---
     const prompt = `
       You are "Grove," a world-class cold email strategist. Your task is to write a highly professional, concise, and personalized cold email that feels human and compels a response.
 
       **Output format MUST be a single, raw JSON object with two keys: "subject" and "body". Do NOT add any markdown like \`\`\`json, introductory text, or explanations.**
 
-      **Sender's Profile:**
+      ---
+      **SENDER'S PROFILE:**
       - Name: ${senderProfile.name}
       - Title: ${senderProfile.title}
       - Company: ${senderProfile.company || 'Not provided (acting as an individual)'}
       - Website: ${senderProfile.website || 'Not provided'}
       - Unique Value Proposition (What they do): ${senderProfile.uvp}
       - About the sender: ${senderProfile.aboutYourself || 'Not provided'}
-      - **Available Links:**
-        - LinkedIn: ${senderProfile.linkedin || 'Not provided'}
-        - Scheduling Link (cal.com/calendly): ${senderProfile.calcom || 'Not provided'}
-
-      **Recipient's Goal (what the sender wants to achieve):**
-      "${recipientInfo}"
-
-      **Recipient's Context (for hyper-personalization, if provided):**
-      ${recipientContext || "No additional context provided. Infer the recipient's role and potential pain points from the 'Recipient's Goal' to craft a relevant opening."}
-
+      - Scheduling Link (cal.com/calendly): ${senderProfile.calcom || 'Not provided'}
+      - LinkedIn: ${senderProfile.linkedin || 'Not provided'}
+      ---
+      **RECIPIENT INFORMATION:**
+      - Name: ${recipientName || 'Not provided'}
+      - The Goal of this Email: "${emailGoal}"
+      - Personalization Context (The key for the opening line): ${recipientContext || "No specific context provided. Infer the recipient's role and potential pain points from the 'Email Goal' to craft a relevant, but slightly more general, opening line."}
+      ---
       **CRITICAL INSTRUCTIONS:**
-      1.  **Subject Line (subject):** Create a short, intriguing, and professional subject (4-7 words).
-      2.  **Email Body (body):**
-          *   **DO NOT** include a greeting like "Hi [Recipient's Name],". The body must start directly with the opening line.
-          *   **Personalized Opener (1-2 sentences):** This is the most important part. Use the "Recipient's Context" to craft a genuine, specific opening line. If no context is provided, make an intelligent guess based on their likely role from the 'Recipient Goal'.
-          *   **Bridge & Value Prop (2-3 sentences):** Connect your opener to the sender's value prop. Frame it as a solution to the recipient's likely problem.
-          *   **Call to Action (CTA - 1 sentence):** This is where you will use the sender's links intelligently.
-              - If the goal is a demo, partnership, or call, and a scheduling link is available, naturally incorporate it into the CTA. Example: "If this aligns with your priorities, feel free to book a brief chat on my calendar: ${senderProfile.calcom}"
-              - If the goal is more about networking or introduction, and a LinkedIn profile is available, you might suggest connecting there. Example: "My work is focused on [topic], which you can see more of on my LinkedIn. Open to connecting?"
-              - If no link is relevant or available, use a simple, interest-gauging question. Example: "Is improving developer onboarding a priority for you right now?"
-          *   **Tone & Style:** Confident, respectful, concise, and human. Use short paragraphs. Avoid buzzwords.
-          *   **Closing:** The 'body' MUST end before the signature. Do NOT include "Best regards," or the sender's name.
 
+      1.  **Subject Line ("subject"):**
+          *   Create a short, intriguing, and professional subject (4-7 words).
+          *   Avoid generic subjects like "Quick Question". Make it relevant to the personalization context if possible.
+          *   Use lowercase, except for proper nouns. It feels more personal. Example: "your post on scaling engineering teams"
+
+      2.  **Email Body ("body"):**
+          *   **Greeting:** Start the 'body' with a greeting. 
+              - If a 'recipientName' is provided, use it. Example: "Hi ${recipientName},"
+              - If no name is provided, use a professional, neutral greeting like "Hi there,".
+          *   **Formatting:** Use newline characters (\\n\\n) to create short, easy-to-read paragraphs. The entire body should be a single string in the JSON output.
+          *   **Opening Line (1-2 sentences):** This is the MOST important part. Use the "Personalization Context" to write a genuine, specific opening line that shows you've done your research. It should NOT be about you (the sender).
+          *   **Bridge & Value Prop (2-3 sentences):** Smoothly transition from your opening line to the sender's value proposition. Connect their achievement/interest to a problem you solve. Frame it as "I saw you did X, which is why I thought you might be interested in Y."
+          *   **Call to Action (CTA - 1 sentence):** Create a clear, low-friction CTA.
+              - If a scheduling link is available and the goal is a meeting, incorporate it naturally. Example: "Open to exploring this further? You can find a time on my calendar that works for you: ${senderProfile.calcom}"
+              - If no link is available, ask a simple, interest-gauging question. Example: "Is improving developer onboarding a priority for you in Q3?"
+          *   **Closing:** The 'body' MUST end before the signature. Do NOT include "Best regards,", the sender's name, or any contact info. This will be added by the application.
+      ---
+      
       Generate the JSON output now.
     `;
 
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
     
-    const startIndex = responseText.indexOf('{');
-    const endIndex = responseText.lastIndexOf('}');
-
-    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    // Improved JSON parsing to be more robust
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
         console.error("Could not find a valid JSON object in the AI response:", responseText);
         throw new Error("AI did not return a recognizable JSON object.");
     }
-
-    const jsonString = responseText.substring(startIndex, endIndex + 1);
+    
+    const jsonString = jsonMatch[0];
     
     let emailContent;
     try {
