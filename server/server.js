@@ -109,6 +109,18 @@ app.post('/api/generate-email', async (req, res) => {
   }
 });
 
+const cron = require('node-cron');
+cron.schedule('0 * * * *', async () => {
+  try {
+    console.log('Hourly render job starting...');
+    await doRender();
+    console.log('Done rendering');
+  } catch (err) {
+    console.error('Render job failed:', err);
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`✅ Server is running on http://localhost:${PORT}`);
 });
