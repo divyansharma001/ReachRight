@@ -105,7 +105,7 @@ const Index = () => {
     setGeneratedEmail(null);
 
     try {
-      const API_URL = 'http://localhost:3001/api/generate-email';
+      const API_URL = 'https://reachright.onrender.com/api/generate-email';
 
       // --- SENDING IMPROVED DATA STRUCTURE ---
       const response = await axios.post(API_URL, {
