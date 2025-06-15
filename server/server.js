@@ -1,16 +1,16 @@
+// Filename: server/server.js
+
 import express from 'express';
 import cors from 'cors';
-import 'dotenv/config'; // Loads .env file contents into process.env
+import 'dotenv/config';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// --- Middleware Setup ---
 app.use(cors());
 app.use(express.json());
 
-// --- Gemini AI Setup ---
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
   console.error("FATAL ERROR: GEMINI_API_KEY is not set in the .env file.");
@@ -28,8 +28,6 @@ const model = genAI.getGenerativeModel({
   ],
 });
 
-
-// --- API Endpoint ---
 app.post('/api/generate-email', async (req, res) => {
   try {
     const { senderProfile, recipientInfo, recipientContext } = req.body;
@@ -50,6 +48,9 @@ app.post('/api/generate-email', async (req, res) => {
       - Website: ${senderProfile.website || 'Not provided'}
       - Unique Value Proposition (What they do): ${senderProfile.uvp}
       - About the sender: ${senderProfile.aboutYourself || 'Not provided'}
+      - **Available Links:**
+        - LinkedIn: ${senderProfile.linkedin || 'Not provided'}
+        - Scheduling Link (cal.com/calendly): ${senderProfile.calcom || 'Not provided'}
 
       **Recipient's Goal (what the sender wants to achieve):**
       "${recipientInfo}"
@@ -58,13 +59,16 @@ app.post('/api/generate-email', async (req, res) => {
       ${recipientContext || "No additional context provided. Infer the recipient's role and potential pain points from the 'Recipient's Goal' to craft a relevant opening."}
 
       **CRITICAL INSTRUCTIONS:**
-      1.  **Subject Line (subject):** Create a short, intriguing, and professional subject (4-7 words). It must not sound like a template. If recipient context is given, hint at it. Example: "Idea for Acme's marketing" or "re: your post on data strategies".
+      1.  **Subject Line (subject):** Create a short, intriguing, and professional subject (4-7 words).
       2.  **Email Body (body):**
-          *   **Greeting:** Start with "Hi [Recipient's Name],". The app will handle replacing the placeholder.
-          *   **Personalized Opener (1-2 sentences):** This is KEY. If "Recipient's Context" is available, use it to craft a genuine observation. Show you've done your research. Example: "I saw your recent comment on LinkedIn about the challenges of scaling data pipelines, and it struck a chord." If no context, make an intelligent guess based on their likely role from the 'Recipient Goal'. Example: "As a leader in fintech, you're likely always evaluating new security protocols."
-          *   **Bridge & Value Prop (2-3 sentences):** Connect your opener to the sender's value prop. Don't just state what the sender does; frame it as a solution to the recipient's likely problem. Example: "That's why I thought you'd be interested in how we help CTOs like you cut down on integration time by 40%."
-          *   **Clear, Low-Friction CTA (1 sentence):** End with a simple, interest-gauging question. Avoid demanding a meeting. Good: "Is improving developer onboarding a priority for you right now?" Bad: "Are you free for a 15-minute call on Tuesday?".
-          *   **Tone:** Confident, respectful, concise, and human. Use short paragraphs. Avoid buzzwords and hype.
+          *   **DO NOT** include a greeting like "Hi [Recipient's Name],". The body must start directly with the opening line.
+          *   **Personalized Opener (1-2 sentences):** This is the most important part. Use the "Recipient's Context" to craft a genuine, specific opening line. If no context is provided, make an intelligent guess based on their likely role from the 'Recipient Goal'.
+          *   **Bridge & Value Prop (2-3 sentences):** Connect your opener to the sender's value prop. Frame it as a solution to the recipient's likely problem.
+          *   **Call to Action (CTA - 1 sentence):** This is where you will use the sender's links intelligently.
+              - If the goal is a demo, partnership, or call, and a scheduling link is available, naturally incorporate it into the CTA. Example: "If this aligns with your priorities, feel free to book a brief chat on my calendar: ${senderProfile.calcom}"
+              - If the goal is more about networking or introduction, and a LinkedIn profile is available, you might suggest connecting there. Example: "My work is focused on [topic], which you can see more of on my LinkedIn. Open to connecting?"
+              - If no link is relevant or available, use a simple, interest-gauging question. Example: "Is improving developer onboarding a priority for you right now?"
+          *   **Tone & Style:** Confident, respectful, concise, and human. Use short paragraphs. Avoid buzzwords.
           *   **Closing:** The 'body' MUST end before the signature. Do NOT include "Best regards," or the sender's name.
 
       Generate the JSON output now.
@@ -72,10 +76,6 @@ app.post('/api/generate-email', async (req, res) => {
 
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
-    
-    // --- FIX: Robust JSON parsing ---
-    // This block finds the JSON object within the AI's response,
-    // even if it's surrounded by markdown or other text.
     
     const startIndex = responseText.indexOf('{');
     const endIndex = responseText.lastIndexOf('}');
@@ -95,7 +95,6 @@ app.post('/api/generate-email', async (req, res) => {
         console.error("Original AI response was:", responseText);
         throw new Error("AI returned a malformed JSON object.");
     }
-    // --- End of Fix ---
 
     res.status(200).json(emailContent);
 
@@ -105,8 +104,6 @@ app.post('/api/generate-email', async (req, res) => {
   }
 });
 
-
-// --- Start Server ---
 app.listen(PORT, () => {
   console.log(`✅ Server is running on http://localhost:${PORT}`);
 });
