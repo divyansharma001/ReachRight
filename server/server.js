@@ -17,7 +17,7 @@ if (!apiKey) {
 
 const genAI = new GoogleGenerativeAI(apiKey);
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash", // Using 1.5 Flash for better instruction following and speed
+  model: "gemini-1.5-flash", // Using 1.5 Flash for better instruction following and speed
   safetySettings: [
     { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
     { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -26,7 +26,6 @@ const model = genAI.getGenerativeModel({
   ],
 });
 
-// Health check route
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
@@ -35,6 +34,7 @@ app.get('/health', (req, res) => {
     service: 'Cold Email Generator API'
   });
 });
+
 
 app.post('/api/generate-email', async (req, res) => {
   try {
@@ -132,5 +132,5 @@ cron.schedule('0 * * * *', async () => {
 
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`✅ Server is running on http://localhost:${PORT}`);
 });
